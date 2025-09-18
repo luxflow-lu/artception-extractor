@@ -1,0 +1,61 @@
+name: Extract Artception Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      category:
+        description: "Catégorie à extraire"
+        required: true
+        type: choice
+        options: [graphisme, architecture, musique, cinema, photo, mode, design, peinture, cuisine, all]
+      lang:
+        description: "Langue labels (WDQS)"
+        required: false
+        default: "fr,en"
+      limit:
+        description: "Limite items (tests)"
+        required: false
+        default: "200"
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run extractor
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: |
+          python scripts/extract.py \
+            --category "${{ inputs.category }}" \
+            --lang "${{ inputs.lang }}" \
+            --limit "${{ inputs.limit }}"
+
+      - name: Upload CSV artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: csv-${{ inputs.category }}
+          path: out/csv/
+
+      - name: Commit data branch
+        if: always()
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git checkout -B data
+          mkdir -p data_drop
+          cp -r out/csv/* data_drop/ || true
+          git add data_drop || true
+          git commit -m "data: update ${{ inputs.category }}" || true
+          git push -f origin data
