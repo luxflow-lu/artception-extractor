@@ -1,0 +1,7 @@
+pandas==2.2.2
+requests==2.32.3
+python-slugify==8.0.4
+musicbrainzngs==0.7.1
+tenacity==9.0.0
+ratelimit==2.2.1
+PyYAML==6.0.2
