@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 import pandas as pd
+import re
 
 from scripts.utils import CATEGORIES, slugify
 from scripts.model import (
@@ -27,9 +28,7 @@ def write_df(df, path, cols):
     df.to_csv(path, index=False)
 
 def init_categories():
-    rows = []
-    for name, slug in CATEGORIES:
-        rows.append({"name": name, "slug": slug, "icon_img_url":"", "accent_hex": ""})
+    rows = [{"name": n, "slug": s, "icon_img_url":"", "accent_hex": ""} for (n,s) in CATEGORIES]
     cat_df = pd.DataFrame(rows)
     write_df(cat_df, CORE/"categories.csv", CORE_CATEGORIES_COLS)
 
@@ -44,11 +43,20 @@ def merge_styles(new_df):
     write_df(merged, styles_path, CORE_STYLES_COLS)
 
 def ensure_empty_graphisme_children():
-    # Crée des fichiers vides si rien n’a été généré (pour import Webflow sans erreurs)
-    write_df(pd.DataFrame(columns=PALETTE_COLS), OUT/"graphisme/palettes.csv", PALETTE_COLS)
-    write_df(pd.DataFrame(columns=COULEUR_COLS), OUT/"graphisme/couleurs.csv", COULEUR_COLS)
-    write_df(pd.DataFrame(columns=TYPEFACE_COLS), OUT/"graphisme/typeface.csv", TYPEFACE_COLS)
-    write_df(pd.DataFrame(columns=FONT_PAIRING_COLS), OUT/"graphisme/font_pairing.csv", FONT_PAIRING_COLS)
+    # Fichiers vides pour import Webflow, si non générés
+    if not (OUT/"graphisme/palettes.csv").exists():
+        write_df(pd.DataFrame(columns=PALETTE_COLS), OUT/"graphisme/palettes.csv", PALETTE_COLS)
+    if not (OUT/"graphisme/couleurs.csv").exists():
+        write_df(pd.DataFrame(columns=COULEUR_COLS), OUT/"graphisme/couleurs.csv", COULEUR_COLS)
+    if not (OUT/"graphisme/typeface.csv").exists():
+        write_df(pd.DataFrame(columns=TYPEFACE_COLS), OUT/"graphisme/typeface.csv", TYPEFACE_COLS)
+    if not (OUT/"graphisme/font_pairing.csv").exists():
+        write_df(pd.DataFrame(columns=FONT_PAIRING_COLS), OUT/"graphisme/font_pairing.csv", FONT_PAIRING_COLS)
+
+def normalize_lang(s: str) -> str:
+    # supprime espaces & virgules pendantes: "fr," -> "fr"
+    parts = [p.strip() for p in (s or "").split(",") if p.strip()]
+    return ",".join(parts) or "fr,en"
 
 def main():
     ap = argparse.ArgumentParser()
@@ -57,17 +65,19 @@ def main():
     ap.add_argument("--limit", type=int, default=200)
     args = ap.parse_args()
 
+    args.lang = normalize_lang(args.lang)
+
     init_categories()
     CORE.mkdir(parents=True, exist_ok=True)
 
     cat = args.category.lower()
+
     if cat in ["all", "graphisme"]:
         styles, variants, palettes, couleurs = run_graphisme(lang=args.lang, limit=args.limit)
         merge_styles(styles)
         write_df(variants, OUT/"graphisme/graphisme_variants.csv", GRAPHISME_COLS)
         write_df(palettes, OUT/"graphisme/palettes.csv", PALETTE_COLS)
         write_df(couleurs, OUT/"graphisme/couleurs.csv", COULEUR_COLS)
-        # Placeholders (si tu veux préremplir des fontes plus tard)
         ensure_empty_graphisme_children()
 
     if cat in ["all", "architecture"]:
