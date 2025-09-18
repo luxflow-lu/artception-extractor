@@ -1,4 +1,5 @@
-# .github/workflows/extract.yml
+name: Extract Artception Data
+
 on:
   workflow_dispatch:
     inputs:
