@@ -1,57 +1,47 @@
-name: Extract Artception Data
-
+# .github/workflows/extract.yml
 on:
   workflow_dispatch:
     inputs:
       category:
-        description: "Catégorie à extraire"
-        required: true
         type: choice
         options: [graphisme, architecture, musique, cinema, photo, mode, design, peinture, cuisine, all]
       lang:
-        description: "Langues préférées (labels WDQS). Ex: fr,en"
-        required: false
         default: "fr,en"
       limit:
-        description: "Limite d'items (tests)"
-        required: false
         default: "200"
-  schedule:
-    - cron: "0 3 * * 1"
-
-permissions:
-  contents: write   # <-- nécessaire pour pousser sur la branche 'data'
-
+      mode:
+        description: "Ecriture du core/styles.csv"
+        type: choice
+        options: [isolate, merge]
+        default: isolate
+      wipe_out:
+        description: "Nettoyer out/csv/ avant extraction"
+        type: boolean
+        default: true
 jobs:
   extract:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install deps
-        run: pip install -r requirements.txt
-
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r requirements.txt
+      - name: Clean previous outputs
+        if: ${{ inputs.wipe_out == 'true' }}
+        run: rm -rf out/csv || true
       - name: Run extractor
-        env:
-          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        env: { TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }} }
         run: |
           python -m scripts.extract \
             --category "${{ inputs.category }}" \
             --lang "${{ inputs.lang }}" \
-            --limit "${{ inputs.limit }}"
-
-      - name: Upload CSV artifacts
+            --limit "${{ inputs.limit }}" \
+            --mode "${{ inputs.mode }}"
+      - uses: actions/upload-artifact@v4
         if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: csv-${{ inputs.category }}
-          path: out/csv/
-
+        with: { name: csv-${{ inputs.category }}, path: out/csv/ }
       - name: Commit data branch
         if: always()
         run: |
@@ -59,7 +49,6 @@ jobs:
           git config user.email "actions@github.com"
           git checkout -B data
           mkdir -p data_drop
-          # copie tolérante si out/csv est vide
           if [ -d "out/csv" ]; then cp -r out/csv/* data_drop/ || true; fi
           git add data_drop || true
           git commit -m "data: update ${{ inputs.category }}" || true
