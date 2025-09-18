@@ -9,15 +9,18 @@ on:
         type: choice
         options: [graphisme, architecture, musique, cinema, photo, mode, design, peinture, cuisine, all]
       lang:
-        description: "Langue labels (WDQS)"
+        description: "Langues préférées (labels WDQS). Ex: fr,en"
         required: false
         default: "fr,en"
       limit:
-        description: "Limite items (tests)"
+        description: "Limite d'items (tests)"
         required: false
         default: "200"
   schedule:
     - cron: "0 3 * * 1"
+
+permissions:
+  contents: write   # <-- nécessaire pour pousser sur la branche 'data'
 
 jobs:
   extract:
@@ -37,12 +40,13 @@ jobs:
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
         run: |
-          python scripts/extract.py \
+          python -m scripts.extract \
             --category "${{ inputs.category }}" \
             --lang "${{ inputs.lang }}" \
             --limit "${{ inputs.limit }}"
 
       - name: Upload CSV artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: csv-${{ inputs.category }}
@@ -55,7 +59,8 @@ jobs:
           git config user.email "actions@github.com"
           git checkout -B data
           mkdir -p data_drop
-          cp -r out/csv/* data_drop/ || true
+          # copie tolérante si out/csv est vide
+          if [ -d "out/csv" ]; then cp -r out/csv/* data_drop/ || true; fi
           git add data_drop || true
           git commit -m "data: update ${{ inputs.category }}" || true
           git push -f origin data
